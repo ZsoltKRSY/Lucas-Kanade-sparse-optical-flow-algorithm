@@ -11,7 +11,7 @@ using namespace std;
 using namespace cv;
 namespace fs = std::filesystem;
 
-int convert_video_to_frames(const char *videoPath, const char *folderPath) {
+int convert_video_to_frames(const char *videoPath, const string &folderPath) {
     VideoCapture capture(videoPath);
     if (!capture.isOpened()) {
         printf("Error: could not open video file.\n");
@@ -38,11 +38,12 @@ int convert_video_to_frames(const char *videoPath, const char *folderPath) {
     return 0;
 }
 
-vector<Mat> frames_open(const char *folderPath) {
+vector<Mat> frames_open(const string &folderPath, int &status) {
     vector<Mat> frames;
 
     if (!fs::exists(folderPath) || !fs::is_directory(folderPath)) {
         printf("Error: folder does not exist or is not a directory.\n");
+        status = 1;
         return frames;
     }
 
@@ -60,6 +61,7 @@ vector<Mat> frames_open(const char *folderPath) {
         }
     }
 
+    status = 0;
     return frames;
 }
 

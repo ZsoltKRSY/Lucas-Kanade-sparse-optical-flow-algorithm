@@ -11,9 +11,9 @@
 using namespace std;
 using namespace cv;
 
-int convert_video_to_frames(const char *videoPath, const char *folderPath);
+int convert_video_to_frames(const char *videoPath, const string &folderPath);
 
-vector<Mat> frames_open(const char *folderPath);
+vector<Mat> frames_open(const string &folderPath, int &status);
 
 vector<Mat> frames_to_grayscale(const vector<Mat> &source);
 

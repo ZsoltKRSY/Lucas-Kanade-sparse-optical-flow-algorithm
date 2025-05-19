@@ -55,8 +55,8 @@ Mat gaussianBlur(const Mat &source, int kernel_size, double sigma) {
 
     int k = kernel_size / 2;
     double sum = 0.0;
-    for (int i = -k; i < k; ++i) {
-        for (int j = -k; j < k; ++j) {
+    for (int i = -k; i <= k; ++i) {
+        for (int j = -k; j <= k; ++j) {
             double val = exp(-(i * i + j * j) / (2.0 * sigma * sigma));
             kernel.at<double>(i + k, j + k) = val;
             sum += val;
@@ -70,8 +70,8 @@ Mat gaussianBlur(const Mat &source, int kernel_size, double sigma) {
     for (int i = 0; i < source.rows; ++i) {
         for (int j = 0; j < source.cols; ++j) {
             double pixel = 0.0;
-            for (int m = -k; m < k; ++m) {
-                for (int n = -k; n < k; ++n) {
+            for (int m = -k; m <= k; ++m) {
+                for (int n = -k; n <= k; ++n) {
                     pixel += kernel.at<double>(m + k, n + k) * sourcePadded.at<T>(i + m + k, j + n + k);
                 }
             }
