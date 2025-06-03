@@ -67,8 +67,8 @@ int main() {
         printf("Running Lucas Kanade Sparse Optical Flow algorithm...\n");
         const int CORNERPOINT_REFRESH_RATE = -1;
         vector<vector<Point2f>> all_points = frames_optical_flow(frames, 150, 0.3, 7,
-                                                                 10, 5, 0.01, CORNERPOINT_REFRESH_RATE);
-        //traffic best: 15, 3, 0.03/0.1; people walking best: 10, 3, 0.2
+                                                                 10, 5, 0.03, 4, CORNERPOINT_REFRESH_RATE);
+        //traffic best: 10, 5, 0.03/0.1, 2-3; people walking best: 10, 3, 0.03, 2-3
 
         printf("Running optical flow visualization algorithm...\n");
         vector<Mat> optical_flow_frames = frames_show_optical_flow(frames, all_points, CORNERPOINT_REFRESH_RATE,

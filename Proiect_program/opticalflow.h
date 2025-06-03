@@ -13,11 +13,11 @@ using namespace cv;
 
 vector<Point2f>
 calculate_optical_flow(const Mat &prevImg, const Mat &nextImg, const vector<Point2f> &prevPoints,
-                       int window_size, int max_iters, double epsilon);
+                       int window_size, int max_iters, double epsilon, int nr_levels);
 
 vector<vector<Point2f>>
 frames_optical_flow(const vector<Mat> &frames, int max_corners, double quality, int min_distance, int window_size,
-                    int max_iters, double epsilon, int cornerPoint_refresh_rate);
+                    int max_iters, double epsilon, int nr_levels, int cornerPoint_refresh_rate);
 
 vector<Mat>
 frames_show_optical_flow(const vector<Mat> &frames, const vector<vector<Point2f>> &all_points,

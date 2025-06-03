@@ -10,37 +10,98 @@
 using namespace std;
 using namespace cv;
 
+vector<Mat> buildImgPyramid(const Mat &source, int nr_levels) {
+    vector<Mat> pyramid;
+    pyramid.push_back(source.clone());
+
+    for (int i = 1; i <= nr_levels; ++i) {
+        Mat down = gaussianBlur<double>(pyramid[i - 1], 5, 1.0);
+        resize(down, down, Size(pyramid[i - 1].cols / 2, pyramid[i - 1].rows / 2), 0, 0, INTER_LINEAR);
+        pyramid.push_back(down);
+    }
+
+    return pyramid;
+}
+
+double bilinearInterpolate(const Mat &source, double y, double x) {
+    int x0 = (int) floor(x);
+    int y0 = (int) floor(y);
+    int x1 = x0 + 1;
+    int y1 = y0 + 1;
+
+    if (x0 < 0 || y0 < 0 || x1 >= source.cols || y1 >= source.rows) {
+        return 0.0;
+    }
+
+    double a = x - x0;
+    double b = y - y0;
+
+    double val = (1 - a) * (1 - b) * source.at<double>(y0, x0) +
+                 a * (1 - b) * source.at<double>(y0, x1) +
+                 (1 - a) * b * source.at<double>(y1, x0) +
+                 a * b * source.at<double>(y1, x1);
+
+    return val;
+}
+
 vector<Point2f>
 calculate_optical_flow(const Mat &prevImg, const Mat &nextImg, const vector<Point2f> &prevPoints,
-                       int window_size, int max_iters, double epsilon) {
-    Mat Ix, Iy;
-    calculateGradients(prevImg, Ix, Iy);
+                       int window_size, int max_iters, double epsilon, int nr_levels) {
+    Mat prevImgConv, nextImgConv;
+    prevImg.convertTo(prevImgConv, CV_64F);
+    nextImg.convertTo(nextImgConv, CV_64F);
 
-    int half_window = window_size / 2;
-    int rows = prevImg.rows, cols = prevImg.cols;
-    vector<Point2f> nextPoints;
+    vector<Mat> prevPyramid, nextPyramid;
+    prevPyramid = buildImgPyramid(prevImgConv, nr_levels);
+    nextPyramid = buildImgPyramid(nextImgConv, nr_levels);
 
-    for (const auto &point: prevPoints) {
-        Point2f flow(0.0f, 0.0f);
-        bool success = true;
+    vector<Point2f> currPoints = prevPoints;
+    float scale = 1.0f / (float) (1 << nr_levels);
 
-        for (int iter = 0; iter < max_iters; ++iter) {
-            double A11 = 0, A12 = 0, A22 = 0;
-            double b1 = 0, b2 = 0;
+    for (auto &point: currPoints) {
+        point *= scale;
+    }
 
-            for (int dy = -half_window; dy < half_window; ++dy) {
-                for (int dx = -half_window; dx < half_window; ++dx) {
-                    float x = point.x + flow.x + (float) dx;
-                    float y = point.y + flow.y + (float) dy;
+    for (int level = nr_levels; level >= 0; --level) {
+        Mat prev = prevPyramid[level];
+        Mat next = nextPyramid[level];
 
-                    int xi = static_cast<int>(x);
-                    int yi = static_cast<int>(y);
-                    if (isInside(rows, cols, yi, xi)) {
-                        double ix = Ix.at<double>(yi, xi);
-                        double iy = Iy.at<double>(yi, xi);
+        Mat Ix, Iy;
+        calculateGradients(prev, Ix, Iy);
 
-                        double i1 = static_cast<double>(prevImg.at<uchar>(yi, xi));
-                        double i2 = static_cast<double>(nextImg.at<uchar>(yi, xi));
+        int level_window_size = window_size * (1 << (nr_levels - level));
+        int half_window = level_window_size / 2;
+        int rows = prev.rows, cols = prev.cols;
+
+        for (int idx = 0; idx < currPoints.size(); ++idx) {
+            Point2f point = currPoints[idx];
+
+            if (point.x < 0 || point.y < 0) {
+                continue;
+            }
+
+            Point2f flow = Point2f(0.0f, 0.0f);
+
+            bool success = true;
+
+            for (int iter = 0; iter < max_iters; ++iter) {
+                double A11 = 0, A12 = 0, A22 = 0;
+                double b1 = 0, b2 = 0;
+
+                for (int dy = -half_window; dy <= half_window; ++dy) {
+                    for (int dx = -half_window; dx <= half_window; ++dx) {
+                        float x = point.x + flow.x + (float) dx;
+                        float y = point.y + flow.y + (float) dy;
+
+                        if (x < 0 || x >= (float) cols || y < 0 || y >= (float) rows) {
+                            continue;
+                        }
+
+                        double ix = bilinearInterpolate(Ix, y, x);
+                        double iy = bilinearInterpolate(Iy, y, x);
+
+                        double i1 = bilinearInterpolate(prev, y, x);
+                        double i2 = bilinearInterpolate(next, y, x);
                         double it = i2 - i1;
 
                         A11 += ix * ix;
@@ -68,21 +129,29 @@ calculate_optical_flow(const Mat &prevImg, const Mat &nextImg, const vector<Poin
                     break;
                 }
             }
+
+            if (success) {
+                currPoints[idx] = point + flow;
+            } else {
+                currPoints[idx] = Point2f(-1.0f, -1.0f);
+            }
         }
 
-        if (success) {
-            nextPoints.push_back(point + flow);
-        } else {
-            nextPoints.emplace_back(-1.0f, -1.0f);
+        if (level > 0) {
+            for (auto &currPoint: currPoints) {
+                if (currPoint.x != -1 && currPoint.y != -1) {
+                    currPoint *= 2.0f;
+                }
+            }
         }
     }
 
-    return nextPoints;
+    return currPoints;
 }
 
 vector<vector<Point2f>>
 frames_optical_flow(const vector<Mat> &frames, int max_corners, double quality, int min_distance, int window_size,
-                    int max_iters, double epsilon, int cornerPoint_refresh_rate) {
+                    int max_iters, double epsilon, int nr_levels, int cornerPoint_refresh_rate) {
     vector<vector<Point2f>> result;
 
     printf("Frame 0\n");
@@ -112,7 +181,7 @@ frames_optical_flow(const vector<Mat> &frames, int max_corners, double quality, 
 
         printf("Frame %d\n", i);
         cornerPoints_next = calculate_optical_flow(frames.at(i - 1), frames.at(i), cornerPoints_prev, window_size,
-                                                   max_iters, epsilon);
+                                                   max_iters, epsilon, nr_levels);
         result.push_back(cornerPoints_next);
 
         cornerPoints_prev = cornerPoints_next;
